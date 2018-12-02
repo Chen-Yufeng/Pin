@@ -32,7 +32,7 @@ class FloatingService : Service() {
     private lateinit var gestureDetector: GestureDetector
     private lateinit var selectView: TransparentSelectRevealView
     private lateinit var selectLayoutParams: WindowManager.LayoutParams
-    private lateinit var croppedView: ImageView
+    private var croppedView: ImageView? = null
     private lateinit var croppedViewLayoutParms: WindowManager.LayoutParams
     private var centerX: Int = 0
     private var centerY: Int = 0
@@ -212,7 +212,7 @@ class FloatingService : Service() {
                 windowManager.updateViewLayout(selectView, selectLayoutParams)
                 // create new ImageView (CroppedView)
                 croppedView = ImageView(applicationContext)
-                croppedView.setImageBitmap(bitmap)
+                croppedView!!.setImageBitmap(bitmap)
                 croppedViewLayoutParms = WindowManager.LayoutParams()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     croppedViewLayoutParms.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -227,7 +227,7 @@ class FloatingService : Service() {
                 croppedViewLayoutParms.x = rect.left
                 croppedViewLayoutParms.y = rect.top
                 // enable move
-                croppedView.setOnTouchListener(object : View.OnTouchListener {
+                croppedView!!.setOnTouchListener(object : View.OnTouchListener {
                     private var x: Int = 0
                     private var y: Int = 0
                     override fun onTouch(p0: View?, p1: MotionEvent?): Boolean {
@@ -237,7 +237,8 @@ class FloatingService : Service() {
                         // whether single tap or not.
                         if (gestureDetector.onTouchEvent(p1)) {
                             // simple tap
-                            windowManager.removeViewImmediate(croppedView)  // may leak
+                            windowManager.removeViewImmediate(croppedView)
+                            croppedView = null
                             imageButton.visibility = View.VISIBLE
                             windowManager.updateViewLayout(imageButton, layoutParams)
                         } else {
@@ -291,6 +292,11 @@ class FloatingService : Service() {
 
     private fun stop() {
         windowManager.removeViewImmediate(imageButton)
+        windowManager.removeViewImmediate(selectView)
+        if (croppedView != null) {
+            windowManager.removeViewImmediate(croppedView)
+            croppedView = null
+        }
         stopSelf(startId)
     }
 
