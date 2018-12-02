@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Pin</string>
+    <string name="instructions">Instructions:\n点击开关以启动和关闭悬浮窗截图服务。点击悬浮窗可以划区域截屏，悬浮窗和截图均保持在屏幕最上方并且可以拖动，再次点击截图可关闭。</string>
 </resources>

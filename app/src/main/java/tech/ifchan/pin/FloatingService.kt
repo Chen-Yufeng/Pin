@@ -82,6 +82,9 @@ class FloatingService : Service() {
         height = displayMetrics.heightPixels
         dpi = displayMetrics.densityDpi
 
+        // request permission
+        openScreenshotActivity()
+
         super.onCreate()
     }
 
@@ -127,7 +130,7 @@ class FloatingService : Service() {
 
                         val imageReader =
                             ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 1)
-                        val virtualDisplay = mediaProjection?.createVirtualDisplay(   // why use '?.'?
+                        val virtualDisplay = mediaProjection?.createVirtualDisplay(
                             "Pin",
                             width,
                             height,
