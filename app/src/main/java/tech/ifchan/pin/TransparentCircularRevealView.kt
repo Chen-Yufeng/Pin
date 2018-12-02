@@ -2,11 +2,7 @@ package tech.ifchan.pin
 
 import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
+import android.graphics.*
 import android.util.AttributeSet
 import android.view.View
 
@@ -26,6 +22,9 @@ class TransparentCircularRevealView @JvmOverloads constructor(
     private var isAnimEnd = true
     private var isStarted = false
 
+    private lateinit var bitmap: Bitmap
+    private lateinit var desRect: Rect
+
     init {
         mTransPaint = Paint(Paint.ANTI_ALIAS_FLAG)
         mTransPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_OUT)
@@ -37,11 +36,14 @@ class TransparentCircularRevealView @JvmOverloads constructor(
         // 25% Gray
         canvas.drawColor(Color.parseColor("#40000000"))
         if (isStarted) {
-            canvas.drawCircle(mCircleCenterX, mCircleCenterY, mCurrentCircleRadius, mTransPaint)
+            canvas.drawBitmap(getCroppedBitmap(bitmap, mCircleCenterX, mCircleCenterY, mCurrentCircleRadius), null, desRect, null)
+//            canvas.drawCircle(mCircleCenterX, mCircleCenterY, mCurrentCircleRadius, mTransPaint)
         }
     }
 
-    fun startCircularRevealAnim(x: Float, y: Float, r: Float) {
+    fun startCircularRevealAnim(x: Float, y: Float, r: Float, b: Bitmap) {
+        bitmap = b
+        desRect = Rect(0, 0, width, height)
         isStarted = true
         mCircleCenterX = x
         mCircleCenterY = y
@@ -62,6 +64,23 @@ class TransparentCircularRevealView @JvmOverloads constructor(
             postInvalidate()
         }
         valueAnimator.start()
+    }
+
+    private fun getCroppedBitmap(bitmap: Bitmap, x: Float, y: Float, r: Float): Bitmap {
+        val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+
+        val color = 0xff424242
+        val paint = Paint()
+        val rect = Rect(0, 0, bitmap.width, bitmap.height)
+
+        paint.isAntiAlias = true
+        canvas.drawARGB(0, 0, 0, 0)
+        paint.color = color.toInt()
+        canvas.drawCircle(x, y, r, paint)
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(bitmap, rect, rect, paint)
+        return output
     }
 
     fun reset() {
