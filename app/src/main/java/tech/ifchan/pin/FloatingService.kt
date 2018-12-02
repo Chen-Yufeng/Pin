@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.media.ImageReader
 import android.media.projection.MediaProjection
@@ -14,10 +15,12 @@ import android.os.IBinder
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.DisplayMetrics
+import android.util.Log
 import android.util.TypedValue
 import android.view.*
 import android.view.WindowManager.LayoutParams.*
 import android.widget.ImageButton
+import android.widget.ImageView
 
 class FloatingService : Service() {
     private lateinit var myBinder: IBinder
@@ -27,8 +30,10 @@ class FloatingService : Service() {
     private lateinit var windowManager: WindowManager
     private var startId: Int = 0
     private lateinit var gestureDetector: GestureDetector
-    private lateinit var circularView: TransparentCircularRevealView
-    private lateinit var circularLayoutParams: WindowManager.LayoutParams
+    private lateinit var selectView: TransparentSelectRevealView
+    private lateinit var selectLayoutParams: WindowManager.LayoutParams
+    private lateinit var croppedView: ImageView
+    private lateinit var croppedViewLayoutParms: WindowManager.LayoutParams
     private var centerX: Int = 0
     private var centerY: Int = 0
 
@@ -38,6 +43,8 @@ class FloatingService : Service() {
     private var height: Int = 0
     private var dpi: Int = 0
 //    private var statusBarHeight = 0
+    private var statusBarHeight = 0
+    private var navigationBarHeight = 0
 
     public enum class Control {
         START, STOP
@@ -98,23 +105,7 @@ class FloatingService : Service() {
         layoutParams.y = centerY
         windowManager.addView(imageButton, layoutParams)
 
-        // Circular View
-        circularView = TransparentCircularRevealView(applicationContext)
-        circularLayoutParams = WindowManager.LayoutParams()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            circularLayoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            circularLayoutParams.type = WindowManager.LayoutParams.TYPE_PHONE
-        }
-        circularLayoutParams.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL
-        circularLayoutParams.format = PixelFormat.RGBA_8888
-        circularLayoutParams.gravity = Gravity.TOP or Gravity.LEFT
-        circularLayoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
-        circularLayoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
-        circularLayoutParams.x = 0
-        circularLayoutParams.y = 0
-        circularView.visibility = View.GONE
-        windowManager.addView(circularView, circularLayoutParams)
+        initSelectView()
 
         gestureDetector = GestureDetector(this, SingleTapConfirm())
         imageButton.setOnTouchListener(object : View.OnTouchListener {
@@ -136,7 +127,7 @@ class FloatingService : Service() {
 
                         val imageReader =
                             ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 1)
-                        mediaProjection?.createVirtualDisplay(   // why use '?.'?
+                        val virtualDisplay = mediaProjection?.createVirtualDisplay(   // why use '?.'?
                             "Pin",
                             width,
                             height,
@@ -152,20 +143,28 @@ class FloatingService : Service() {
                         if (image == null) {
                             return false
                         }
+                        val width = image.width
+                        val height = image.height
                         val buffer = image.planes[0].buffer
                         val pixelStride = image.planes[0].pixelStride
                         val rowStride = image.planes[0].rowStride
-                        val rowPadding = rowStride - pixelStride * image.width
-                        val bitmap = Bitmap.createBitmap(image.width + rowPadding / pixelStride, image.height, Bitmap.Config.ARGB_8888)
+                        val rowPadding = rowStride - pixelStride * width
+                        val bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888)
                         bitmap.copyPixelsFromBuffer(buffer)  // Now we get bitmap.
                         image.close()
-                        // remove system bar?
+                        if (virtualDisplay != null) {
+                            virtualDisplay.release()
+                        }
 
-                        circularView.visibility = View.VISIBLE
-                        circularView.startCircularRevealAnim(
+                        // remove system bar.
+                        val bitmapWithoutTwoBars = Bitmap.createBitmap(bitmap, 0, statusBarHeight, width, height - statusBarHeight)
+                        Log.d("@ifchan", "image.width=" + width + "image.height=" + height + "statusbarheight=" + statusBarHeight + "navigheight=" + navigationBarHeight)
+                        selectView.visibility = View.VISIBLE
+                        windowManager.updateViewLayout(selectView,selectLayoutParams)
+                        selectView.startCircularRevealAnim(
                             centerX.toFloat(),
                             centerY.toFloat(),
-                            0f, bitmap
+                            0f, bitmapWithoutTwoBars
                             )
                     }
                 } else {
@@ -200,6 +199,93 @@ class FloatingService : Service() {
         })
     }
 
+    private fun initSelectView() {
+        // Select View
+        selectView = TransparentSelectRevealView(applicationContext)
+        // set callback for selection completed.
+        selectView.setCallBack(object : TransparentSelectRevealView.CallBack {
+            override fun onSelectCompleted(bitmap: Bitmap, rect: Rect) {
+                selectView.visibility = View.GONE
+                windowManager.updateViewLayout(selectView, selectLayoutParams)
+                // create new ImageView (CroppedView)
+                croppedView = ImageView(applicationContext)
+                croppedView.setImageBitmap(bitmap)
+                croppedViewLayoutParms = WindowManager.LayoutParams()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    croppedViewLayoutParms.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    croppedViewLayoutParms.type = WindowManager.LayoutParams.TYPE_PHONE
+                }
+                croppedViewLayoutParms.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL
+                croppedViewLayoutParms.format = PixelFormat.RGBA_8888
+                croppedViewLayoutParms.gravity = Gravity.TOP or Gravity.LEFT
+                croppedViewLayoutParms.height = rect.bottom - rect.top
+                croppedViewLayoutParms.width = rect.right - rect.left
+                croppedViewLayoutParms.x = rect.left
+                croppedViewLayoutParms.y = rect.top
+                // enable move
+                croppedView.setOnTouchListener(object : View.OnTouchListener {
+                    private var x: Int = 0
+                    private var y: Int = 0
+                    override fun onTouch(p0: View?, p1: MotionEvent?): Boolean {
+                        if (p1 == null) {
+                            return false
+                        }
+                        // whether single tap or not.
+                        if (gestureDetector.onTouchEvent(p1)) {
+                            // simple tap
+                            windowManager.removeViewImmediate(croppedView)  // may leak
+                            imageButton.visibility = View.VISIBLE
+                            windowManager.updateViewLayout(imageButton, layoutParams)
+                        } else {
+                            when (p1.action) {
+                                MotionEvent.ACTION_DOWN -> {
+                                    x = p1.rawX.toInt()
+                                    y = p1.rawY.toInt()
+                                }
+                                MotionEvent.ACTION_MOVE -> {
+                                    val nowX = p1.rawX.toInt()
+                                    val nowY = p1.rawY.toInt()
+                                    val movedX = nowX - x
+                                    val movedY = nowY - y
+                                    x = nowX
+                                    y = nowY
+                                    croppedViewLayoutParms.x += movedX
+                                    croppedViewLayoutParms.y += movedY
+                                    centerX = croppedViewLayoutParms.x
+                                    centerY = croppedViewLayoutParms.y
+                                    //update
+                                    windowManager.updateViewLayout(croppedView, croppedViewLayoutParms)
+                                }
+                                else -> {
+                                }
+                            }
+                        }
+                        return false
+                    }
+
+                })
+                windowManager.addView(croppedView, croppedViewLayoutParms)
+            }
+
+        })
+        selectLayoutParams = WindowManager.LayoutParams()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            selectLayoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            selectLayoutParams.type = WindowManager.LayoutParams.TYPE_PHONE
+        }
+        selectLayoutParams.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL
+        selectLayoutParams.format = PixelFormat.RGBA_8888
+        selectLayoutParams.gravity = Gravity.TOP or Gravity.LEFT
+        selectLayoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
+        selectLayoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
+        selectLayoutParams.x = 0
+        selectLayoutParams.y = 0
+        selectView.visibility = View.GONE
+        windowManager.addView(selectView, selectLayoutParams)
+    }
+
     private fun stop() {
         windowManager.removeViewImmediate(imageButton)
         stopSelf(startId)
@@ -217,6 +303,11 @@ class FloatingService : Service() {
 
     fun setMediaProjection(mp: MediaProjection) {
         mediaProjection = mp
+    }
+
+    fun setBarHeight(s: Int, n: Int) {
+        statusBarHeight = s
+        navigationBarHeight = n
     }
 
     override fun onBind(intent: Intent): IBinder {

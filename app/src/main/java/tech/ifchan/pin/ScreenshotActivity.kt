@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.graphics.Rect
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
@@ -38,6 +39,20 @@ class ScreenshotActivity : Activity() {
             if (resultCode == Activity.RESULT_OK) {
                 mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
                 floatingService.setMediaProjection(mediaProjection)
+
+                // get status bar and navigation bar height
+                val rect = Rect()
+                val window = window
+                window.decorView.getWindowVisibleDisplayFrame(rect)
+                val statusBarHeight = rect.top
+                val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+                var navigationBarHeight: Int
+                if (resourceId > 0) {
+                    navigationBarHeight = resources.getDimensionPixelSize(resourceId)
+                } else {
+                    navigationBarHeight = 0
+                }
+                floatingService.setBarHeight(statusBarHeight, navigationBarHeight)
             }
         }
         this.finish()
