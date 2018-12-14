@@ -39,7 +39,7 @@ class TransparentSelectRevealView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
-        canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null, Canvas.ALL_SAVE_FLAG)
+        canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
         //        canvas.drawColor(Color.WHITE);
         // 25% Gray
         canvas.drawColor(Color.parseColor("#40000000"))
@@ -57,6 +57,7 @@ class TransparentSelectRevealView @JvmOverloads constructor(
     }
 
     fun startCircularRevealAnim(x: Float, y: Float, r: Float, b: Bitmap) {
+        Log.d("@ifchan", "Bitmap.height=${b.height} width=${b.width}")
         bitmap = b
         desRect = Rect(0, 0, width, height)
         isStarted = true
@@ -77,10 +78,10 @@ class TransparentSelectRevealView @JvmOverloads constructor(
                 isAnimEnd = true
                 setOnTouchListener(object : OnTouchListener {  // After animation is done.
                     var complete = false
-                    var downX: Float = 0f
-                    var downY: Float = 0f
-                    var upX: Float = 0f
-                    var upY: Float = 0f
+                    var downX: Int = 0
+                    var downY: Int = 0
+                    var upX: Int = 0
+                    var upY: Int = 0
                     override fun onTouch(p0: View?, p1: MotionEvent?): Boolean {
                         if (p0 == null || p1 == null) {
                             return false
@@ -89,26 +90,21 @@ class TransparentSelectRevealView @JvmOverloads constructor(
                             MotionEvent.ACTION_DOWN -> {
                                 Log.d("@ifchan", "Down")
                                 complete = false
-                                downX = p1.rawX - p0.left
-                                downY = p1.rawY - p0.top
+                                downX = checkCoordinate(p1.rawX.toInt() - p0.left, 0)
+                                downY = checkCoordinate(p1.rawY.toInt() - p0.top, 1)
                             }
                             MotionEvent.ACTION_MOVE -> {
                                 Log.d("@ifchan", "Move")
-                                upX = p1.rawX - p0.left
-                                upY = p1.rawY - p0.top
-                                convertAndSetTwoRects(
-                                    downX.toInt(),
-                                    downY.toInt(),
-                                    upX.toInt(),
-                                    upY.toInt()
-                                )
+                                upX = checkCoordinate(p1.rawX.toInt() - p0.left, 0)
+                                upY = checkCoordinate(p1.rawY.toInt() - p0.top, 1)
+                                convertAndSetTwoRects( downX, downY, upX, upY )
                                 invalidate()
                             }
                             MotionEvent.ACTION_UP -> {
                                 Log.d("@ifchan", "Up")
                                 complete = true
-                                upX = p1.rawX - p0.left
-                                upY = p1.rawY - p0.top
+                                upX = checkCoordinate(p1.rawX.toInt() - p0.left, 0)
+                                upY = checkCoordinate(p1.rawY.toInt() - p0.top, 1)
                             }
                             else -> {
                             }
@@ -118,20 +114,15 @@ class TransparentSelectRevealView @JvmOverloads constructor(
                                 "@ifchan",
                                 "downX=" + downX + "downY=" + downY + "upX=" + upX + "upY" + upY
                             )
-                            convertAndSetTwoRects(
-                                downX.toInt(),
-                                downY.toInt(),
-                                upX.toInt(),
-                                upY.toInt()
-                            )
+                            convertAndSetTwoRects( downX, downY, upX, upY )
                             invalidate()
                             // crop the bitmap
                             val croppedBitmap = Bitmap.createBitmap(
                                 bitmap,
-                                min(downX, upX).toInt(),
-                                min(downY, upY).toInt(),
-                                abs(downX - upX).toInt(),
-                                abs(downY - upY).toInt()
+                                min(downX, upX),
+                                min(downY, upY),
+                                abs(downX - upX),
+                                abs(downY - upY)
                             )
                             srcRect?.let { callBack?.onSelectCompleted(croppedBitmap, it) }
                             reset()
@@ -146,13 +137,37 @@ class TransparentSelectRevealView @JvmOverloads constructor(
         valueAnimator.start()
     }
 
-    private fun safetifyCoordinate(m: MotionEvent, which: Int) {
-
+    private fun convertAndSetTwoRects(downX: Int, downY: Int, upX: Int, upY: Int) {
+        // Prevent rect from exceeding bitmap
+        srcRect = Rect(
+            min(checkCoordinate(downX, 0), checkCoordinate(upX, 0)),
+            min(checkCoordinate(downY, 1), checkCoordinate(upY, 1)),
+            max(checkCoordinate(downX, 0), checkCoordinate(upX, 0)),
+            max(checkCoordinate(downY, 1), checkCoordinate(upY, 1))
+        )
+        desRect = srcRect as Rect
     }
 
-    private fun convertAndSetTwoRects(downX: Int, downY: Int, upX: Int, upY: Int) {
-        srcRect = Rect(min(downX, upX), min(downY, upY), max(downX, upX), max(downY, upY))
-        desRect = srcRect as Rect
+    private fun checkCoordinate(raw: Int, flag: Int): Int {
+        when (flag) {
+            0 -> {
+                return when {
+                    raw < 0 -> 0
+                    raw > bitmap.width -> bitmap.width
+                    else -> raw
+                }
+            }
+            1 -> {
+                return when {
+                    raw < 0 -> 0
+                    raw > bitmap.height -> bitmap.height
+                    else -> raw
+                }
+            }
+            else -> {
+                return 0
+            }
+        }
     }
 
     private fun getCroppedBitmap(bitmap: Bitmap, x: Float, y: Float, r: Float): Bitmap {

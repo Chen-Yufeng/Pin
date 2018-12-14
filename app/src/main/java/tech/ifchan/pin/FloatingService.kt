@@ -159,7 +159,7 @@ class FloatingService : Service() {
                             virtualDisplay.release()
                         }
 
-                        // remove system bar.
+                        // remove navigation bar.
 //                        val bitmapWithoutTwoBars = Bitmap.createBitmap(bitmap, 0, statusBarHeight, width, height - statusBarHeight)
                         val bitmapWithoutTwoBars = Bitmap.createBitmap(bitmap, 0, 0, width, height)
                         Log.d("@ifchan", "image.width=" + width + "image.height=" + height + "statusbarheight=" + statusBarHeight + "navigheight=" + navigationBarHeight)
