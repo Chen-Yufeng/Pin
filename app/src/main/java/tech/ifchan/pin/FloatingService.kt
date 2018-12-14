@@ -1,8 +1,16 @@
+/*
+* reflection kt/java
+* gesture ontouch
+* ontouch view change? invalidate
+* looper? handler?
+*/
+// todo: maybe out of screen when orientation change
 package tech.ifchan.pin
 
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -76,6 +84,16 @@ class FloatingService : Service() {
         imageButton = ImageButton(applicationContext)
         layoutParams = WindowManager.LayoutParams()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+        renewSizeInfo()
+
+        // request permission
+        openScreenshotActivity()
+
+        super.onCreate()
+    }
+
+    private fun renewSizeInfo() {
         val displayMetrics = DisplayMetrics()
         windowManager.defaultDisplay.getMetrics(displayMetrics)
         width = displayMetrics.widthPixels
@@ -97,11 +115,30 @@ class FloatingService : Service() {
         } catch (e: NoSuchMethodException) {
             navigationBarHeight = 0
         }
+    }
 
-        // request permission
-        openScreenshotActivity()
+    override fun onConfigurationChanged(newConfig: Configuration?) {
+        super.onConfigurationChanged(newConfig)
+        renewWhenOrientationChanged(newConfig)
+    }
 
-        super.onCreate()
+    private fun renewWhenOrientationChanged(newConfig: Configuration?) {
+        if (newConfig == null) {
+            return
+        }
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            renewSizeInfo()
+            renewViewParams()
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            renewSizeInfo()
+            renewViewParams()
+        }
+    }
+
+    private fun renewViewParams() {
+        selectLayoutParams.width = width
+        selectLayoutParams.height = height
+        windowManager.updateViewLayout(selectView, selectLayoutParams)
     }
 
     private fun showFloatingWindow() {

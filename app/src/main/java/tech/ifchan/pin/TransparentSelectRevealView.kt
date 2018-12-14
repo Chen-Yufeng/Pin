@@ -1,3 +1,6 @@
+/*
+* View绘制
+*/
 package tech.ifchan.pin
 
 import android.animation.ValueAnimator
