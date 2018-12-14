@@ -160,7 +160,8 @@ class FloatingService : Service() {
                         }
 
                         // remove system bar.
-                        val bitmapWithoutTwoBars = Bitmap.createBitmap(bitmap, 0, statusBarHeight, width, height - statusBarHeight)
+//                        val bitmapWithoutTwoBars = Bitmap.createBitmap(bitmap, 0, statusBarHeight, width, height - statusBarHeight)
+                        val bitmapWithoutTwoBars = Bitmap.createBitmap(bitmap, 0, 0, width, height)
                         Log.d("@ifchan", "image.width=" + width + "image.height=" + height + "statusbarheight=" + statusBarHeight + "navigheight=" + navigationBarHeight)
                         selectView.visibility = View.VISIBLE
                         windowManager.updateViewLayout(selectView,selectLayoutParams)
@@ -219,7 +220,8 @@ class FloatingService : Service() {
                 } else {
                     croppedViewLayoutParms.type = WindowManager.LayoutParams.TYPE_PHONE
                 }
-                croppedViewLayoutParms.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL
+                croppedViewLayoutParms.type = croppedViewLayoutParms.type
+                croppedViewLayoutParms.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL or FLAG_FULLSCREEN or FLAG_LAYOUT_IN_SCREEN
                 croppedViewLayoutParms.format = PixelFormat.RGBA_8888
                 croppedViewLayoutParms.gravity = Gravity.TOP or Gravity.LEFT
                 croppedViewLayoutParms.height = rect.bottom - rect.top
@@ -279,7 +281,7 @@ class FloatingService : Service() {
         } else {
             selectLayoutParams.type = WindowManager.LayoutParams.TYPE_PHONE
         }
-        selectLayoutParams.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL
+        selectLayoutParams.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL or FLAG_FULLSCREEN or FLAG_LAYOUT_IN_SCREEN
         selectLayoutParams.format = PixelFormat.RGBA_8888
         selectLayoutParams.gravity = Gravity.TOP or Gravity.LEFT
         selectLayoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT

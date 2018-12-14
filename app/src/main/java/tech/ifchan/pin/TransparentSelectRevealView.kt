@@ -139,12 +139,15 @@ class TransparentSelectRevealView @JvmOverloads constructor(
 
                         return false
                     }
-
                 })
             }
             postInvalidate()
         }
         valueAnimator.start()
+    }
+
+    private fun safetifyCoordinate(m: MotionEvent, which: Int) {
+
     }
 
     private fun convertAndSetTwoRects(downX: Int, downY: Int, upX: Int, upY: Int) {
