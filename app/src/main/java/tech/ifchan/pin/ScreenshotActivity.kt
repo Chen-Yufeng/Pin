@@ -10,6 +10,8 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.IBinder
+import android.view.KeyCharacterMap
+import android.view.KeyEvent
 
 class ScreenshotActivity : Activity() {
     private lateinit var floatingService: FloatingService
@@ -40,22 +42,41 @@ class ScreenshotActivity : Activity() {
                 mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
                 floatingService.setMediaProjection(mediaProjection)
 
+                var navigationBarHeight: Int
+                val statusBarHeight: Int
+                val id = resources.getIdentifier("config_showNavigationBar", "bool", "android")
                 // get status bar and navigation bar height
                 val rect = Rect()
                 val window = window
                 window.decorView.getWindowVisibleDisplayFrame(rect)
-                val statusBarHeight = rect.top
-                val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-                var navigationBarHeight: Int
-                if (resourceId > 0) {
-                    navigationBarHeight = resources.getDimensionPixelSize(resourceId)
+                statusBarHeight = rect.top
+                val resourceId =
+                    resources.getIdentifier("navigation_bar_height", "dimen", "android")
+                navigationBarHeight = if (resourceId > 0) {
+                    resources.getDimensionPixelSize(resourceId)
                 } else {
-                    navigationBarHeight = 0
+                    0
                 }
-                floatingService.setBarHeight(statusBarHeight, navigationBarHeight)
+//                if (!hasSoftNavigationBar()) {
+//                    navigationBarHeight = 0
+//                }
+                // todo: delete?
+//                floatingService.setBarHeight(statusBarHeight, navigationBarHeight)
             }
         }
         this.finish()
+    }
+
+    private fun hasSoftNavigationBar(): Boolean {
+        val hasBackKey = KeyCharacterMap.deviceHasKey(KeyEvent.KEYCODE_BACK)
+        val hasHomeKey = KeyCharacterMap.deviceHasKey(KeyEvent.KEYCODE_HOME)
+
+        return !(hasBackKey && hasHomeKey)
+    }
+
+    override fun onDestroy() {
+        unbindService(mConnection)
+        super.onDestroy()
     }
 
     private inner class MyServiceConnection() : ServiceConnection {

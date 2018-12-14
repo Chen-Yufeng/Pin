@@ -42,7 +42,7 @@ class FloatingService : Service() {
     private var width: Int = 0
     private var height: Int = 0
     private var dpi: Int = 0
-//    private var statusBarHeight = 0
+    //    private var statusBarHeight = 0
     private var statusBarHeight = 0
     private var navigationBarHeight = 0
 
@@ -81,6 +81,22 @@ class FloatingService : Service() {
         width = displayMetrics.widthPixels
         height = displayMetrics.heightPixels
         dpi = displayMetrics.densityDpi
+
+        // use reflection to get true height
+        try {
+            val cls = Display::class.java
+            val display = windowManager.defaultDisplay
+            val toString = cls.getDeclaredMethod("toString")
+            toString.isAccessible = true
+            val s = toString.invoke(display) as String
+            val from = s.indexOf("x", s.indexOf("real")) + 2
+            val t = s.indexOf(",", s.indexOf(",", s.indexOf("real")))
+            val realHeightString = s.subSequence(from, t).toString()
+            val realHeight = realHeightString.toInt()
+            navigationBarHeight = realHeight - height
+        } catch (e: NoSuchMethodException) {
+            navigationBarHeight = 0
+        }
 
         // request permission
         openScreenshotActivity()
@@ -128,48 +144,67 @@ class FloatingService : Service() {
                         imageButton.visibility = View.GONE
                         // TODO: imageButton needs to be GONE imadiately!
 
-                        val imageReader =
-                            ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 1)
+                        val imageReader = ImageReader.newInstance(
+                            width,
+                            height + navigationBarHeight,
+                            PixelFormat.RGBA_8888,
+                            1
+                        )
                         val virtualDisplay = mediaProjection?.createVirtualDisplay(
                             "Pin",
                             width,
-                            height,
+                            height + navigationBarHeight,
                             dpi,
                             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                             imageReader.surface,
                             null,
                             null
                         )
-                        // TODO: change more elegent
-                        SystemClock.sleep(100)
-                        val image = imageReader.acquireLatestImage()
-                        if (image == null) {
-                            return false
-                        }
-                        val width = image.width
-                        val height = image.height
-                        val buffer = image.planes[0].buffer
-                        val pixelStride = image.planes[0].pixelStride
-                        val rowStride = image.planes[0].rowStride
-                        val rowPadding = rowStride - pixelStride * width
-                        val bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888)
-                        bitmap.copyPixelsFromBuffer(buffer)  // Now we get bitmap.
-                        image.close()
-                        if (virtualDisplay != null) {
-                            virtualDisplay.release()
-                        }
+                        var hasGot = false
+                        imageReader.setOnImageAvailableListener(object :
+                            ImageReader.OnImageAvailableListener {
+                            override fun onImageAvailable(p0: ImageReader?) {
+                                if (hasGot) {
+                                    return
+                                }
+                                hasGot = true
+                                val image = imageReader.acquireLatestImage()
+                                if (image == null) {
+                                    return
+                                }
+                                val width = image.width
+                                val height = image.height
+                                val buffer = image.planes[0].buffer
+                                val pixelStride = image.planes[0].pixelStride
+                                val rowStride = image.planes[0].rowStride
+                                val rowPadding = rowStride - pixelStride * width
+                                val bitmap = Bitmap.createBitmap(
+                                    width + rowPadding / pixelStride,
+                                    height,
+                                    Bitmap.Config.ARGB_8888
+                                )
+                                bitmap.copyPixelsFromBuffer(buffer)  // Now we get bitmap.
+                                image.close()
+                                if (virtualDisplay != null) {
+                                    virtualDisplay.release()
+                                }
 
-                        // remove navigation bar.
-//                        val bitmapWithoutTwoBars = Bitmap.createBitmap(bitmap, 0, statusBarHeight, width, height - statusBarHeight)
-                        val bitmapWithoutTwoBars = Bitmap.createBitmap(bitmap, 0, 0, width, height)
-                        Log.d("@ifchan", "image.width=" + width + "image.height=" + height + "statusbarheight=" + statusBarHeight + "navigheight=" + navigationBarHeight)
-                        selectView.visibility = View.VISIBLE
-                        windowManager.updateViewLayout(selectView,selectLayoutParams)
-                        selectView.startCircularRevealAnim(
-                            centerX.toFloat(),
-                            centerY.toFloat(),
-                            0f, bitmapWithoutTwoBars
-                            )
+                                // remove navigation bar.
+                                val bitmapWithoutTwoBars =
+                                    Bitmap.createBitmap(bitmap, 0, 0, width, height - navigationBarHeight)
+                                Log.d(
+                                    "@ifchan",
+                                    "image.width=" + width + "image.height=" + height + "statusbarheight=" + statusBarHeight + "navigheight=" + navigationBarHeight
+                                )
+                                selectView.visibility = View.VISIBLE
+                                windowManager.updateViewLayout(selectView, selectLayoutParams)
+                                selectView.startCircularRevealAnim(
+                                    centerX.toFloat(),
+                                    centerY.toFloat(),
+                                    0f, bitmapWithoutTwoBars
+                                )
+                            }
+                        }, null)
                     }
                 } else {
                     when (p1.action) {
@@ -188,7 +223,6 @@ class FloatingService : Service() {
                             layoutParams.y += movedY
                             centerX = layoutParams.x
                             centerY = layoutParams.y
-//                            Log.d("@ifchan", "(" + centerX + ", " + centerY + ")")
 
                             //update
                             windowManager.updateViewLayout(imageButton, layoutParams)
@@ -216,12 +250,14 @@ class FloatingService : Service() {
                 croppedView!!.setImageBitmap(bitmap)
                 croppedViewLayoutParms = WindowManager.LayoutParams()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    croppedViewLayoutParms.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    croppedViewLayoutParms.type =
+                            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 } else {
                     croppedViewLayoutParms.type = WindowManager.LayoutParams.TYPE_PHONE
                 }
                 croppedViewLayoutParms.type = croppedViewLayoutParms.type
-                croppedViewLayoutParms.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL or FLAG_FULLSCREEN or FLAG_LAYOUT_IN_SCREEN
+                croppedViewLayoutParms.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL or
+                        FLAG_FULLSCREEN or FLAG_LAYOUT_IN_SCREEN or FLAG_LAYOUT_NO_LIMITS
                 croppedViewLayoutParms.format = PixelFormat.RGBA_8888
                 croppedViewLayoutParms.gravity = Gravity.TOP or Gravity.LEFT
                 croppedViewLayoutParms.height = rect.bottom - rect.top
@@ -261,7 +297,10 @@ class FloatingService : Service() {
                                     centerX = croppedViewLayoutParms.x
                                     centerY = croppedViewLayoutParms.y
                                     //update
-                                    windowManager.updateViewLayout(croppedView, croppedViewLayoutParms)
+                                    windowManager.updateViewLayout(
+                                        croppedView,
+                                        croppedViewLayoutParms
+                                    )
                                 }
                                 else -> {
                                 }
@@ -281,11 +320,12 @@ class FloatingService : Service() {
         } else {
             selectLayoutParams.type = WindowManager.LayoutParams.TYPE_PHONE
         }
-        selectLayoutParams.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL or FLAG_FULLSCREEN or FLAG_LAYOUT_IN_SCREEN
+        selectLayoutParams.flags = FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL or FLAG_FULLSCREEN or
+                FLAG_LAYOUT_IN_SCREEN or FLAG_LAYOUT_NO_LIMITS
         selectLayoutParams.format = PixelFormat.RGBA_8888
         selectLayoutParams.gravity = Gravity.TOP or Gravity.LEFT
-        selectLayoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
-        selectLayoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
+        selectLayoutParams.height = height
+        selectLayoutParams.width = width
         selectLayoutParams.x = 0
         selectLayoutParams.y = 0
         selectView.visibility = View.GONE
